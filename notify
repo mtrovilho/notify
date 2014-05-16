@@ -1,0 +1,147 @@
+#!/usr/bin/env ruby
+#    CLI to send a notification to OSX Notification Center
+#    Copyright (C) 2014  Marcos Trovilho <marcos@trovilho.com>
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+require 'optparse'
+
+module Notify
+    VERSION = 'v0.0.1'
+
+    class Notification
+        attr_accessor :title, :subtitle, :message, :sound_name
+
+        def initialize( options = {} )
+            @message    = options.fetch( :message, '' )
+            @title      = options.fetch( :title, 'Notify' )
+            @subtitle   = options[:subtitle]
+            @sound_name = options[:sound_name]
+        end
+        
+        def to_applescript
+            # AppleScript Documentation:
+            # Posts a notification using the Notification Center, containing a
+            # title, subtitle, and explanation, and optionally playing a sound.
+            # 
+            # Syntax
+            #     display notification    text    required
+            #         with title          text    optional
+            #         subtitle	          text    optional
+            #         sound name          text    optional
+            #
+            # Parameters
+            #     text
+            #         The body text of the notification. At least one of this
+            #         and the title must be specified.
+            #     with title text
+            #         The title of the notification. At least one of this and
+            #         the body text must be specified.
+            #     subtitle text
+            #         The subtitle of the notification.
+            #     sound name text
+            #         The name of a sound to play when the notification appears.
+            #         This may be the base name of any sound installed in Library/Sounds.
+            #
+            # Result
+            #     None.
+            #
+            # Examples
+            #     display notification "Encoding complete" subtitle "The encoded files are in the folder " & folderName
+            #
+            # Discussion
+            #     Exactly how the notification is presented is controlled by the
+            #     “Notifications” preferences in System Preferences. Users may
+            #     opt to display a reduced form of notification, turn off the
+            #     sound, or even not display them at all.
+            #
+            as =  "display notification \"#{message}\""
+            as << " with title \"#{title}\""
+            as << " subtitle \"#{subtitle}\""     unless subtitle.nil?
+            as << " sound name \"#{sound_name}\"" unless sound_name.nil?
+            as
+        end
+
+        def notify!
+            system( "osascript -e '#{to_applescript}'" )
+        end
+    end
+end
+
+options = {}
+opts = OptionParser.new do |opts|
+    opts.banner = 'Usage: notify [options] message'
+    opts.separator ''
+
+    opts.on(
+        '-t',
+        '--title [TITLE]',
+        'Notification Title (default: Notify)',
+        'NOTE: to pass more than one word you need to use quotes'
+    ) do |title|
+        options[:title] = title
+    end
+
+    opts.on(
+        '-T',
+        '--subtitle [SUBTITLE]',
+        'Notification Subtitle',
+        'NOTE: to pass more than one word you need to use quotes'
+    ) do |subtitle|
+        options[:subtitle] = subtitle
+    end
+
+    opts.on(
+        '-s',
+        '--sound-name [SOUND_NAME]',
+        'Notification Sound Name',
+        'OSX Built-in:',
+        'Basso, Blow, Bottle, Frog, Funk',
+        'Glass, Hero, Morse, Ping, Pop',
+        'Purr, Sosumi, Submarine, Tink'
+    ) do |sound_name|
+        options[:sound_name] = sound_name
+    end
+
+    opts.on( '--verbose', 'Be verbose' ) do |v|
+        options[:verbose] = v
+    end
+
+    opts.separator ''
+
+    opts.on_tail( '-v', '--version', 'Print version' ) do
+        puts Notify::VERSION
+        exit
+    end
+
+    opts.on_tail( '-h', '--help', 'Show this message' ) do
+        puts opts
+        exit
+    end
+end
+opts.parse!
+
+if ARGV.empty?
+    puts opts.banner
+    exit
+end
+
+options[:message] = ARGV.join(' ')
+puts "options: #{options}" if options[:verbose]
+
+notification = Notify::Notification.new( options )
+puts "AppleScript: #{notification.to_applescript}" if options[:verbose]
+
+notification.notify!
+puts "status: #{$?}" if options[:verbose]
+
